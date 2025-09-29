@@ -90,9 +90,9 @@ services:
       - "8000:8000" # Map container port 8000 to host port 8000 (as per your request)
     environment:
       POSTGRES_HOST: product_db # Connects to the 'product_db' service within Docker network
-      AZURE_STORAGE_ACCOUNT_NAME: varniahstg
-      AZURE_STORAGE_ACCOUNT_KEY: 2A37qTaQygbMiZYOx0Asp9clLVzT7yrvWmdbhn75gGu91rT12msLkq7jnbVMNA3rQ4QGu2ypPkM/+AStndcBQA==
-      AZURE_STORAGE_CONTAINER_NAME: varniah
+      # AZURE_STORAGE_ACCOUNT_NAME: varniahstg
+      # AZURE_STORAGE_ACCOUNT_KEY: 2A37qTaQygbMiZYOx0Asp9clLVzT7yrvWmdbhn75gGu91rT12msLkq7jnbVMNA3rQ4QGu2ypPkM/+AStndcBQA==
+      # AZURE_STORAGE_CONTAINER_NAME: varniah
       AZURE_SAS_TOKEN_EXPIRY_HOURS: 24
       RABBITMQ_HOST: rabbitmq # Internal Docker network hostname for RabbitMQ
       RABBITMQ_PORT: 5672
