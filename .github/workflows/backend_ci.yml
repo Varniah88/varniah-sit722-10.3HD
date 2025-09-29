@@ -1,5 +1,4 @@
 name: Backend CI - Test, Build and Push Images to ACR 
-#commenting for testing
 
 on:
   workflow_call: {}
