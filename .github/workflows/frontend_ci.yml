@@ -1,0 +1,49 @@
+name: Frontend CI - Build & Push Image
+
+on:
+  workflow_call: {}
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  ACR_LOGIN_SERVER: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
+
+jobs:
+  build_and_push_frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Frontend (PR check only)
+        if: ${{ github.event_name == 'pull_request' }}
+        run: docker build -t frontend-ci-check ./frontend/
+
+      - name: Azure Login
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Derive ACR name and SHORT_SHA
+        if: ${{ github.event_name != 'pull_request' }}
+        run: |
+          echo "ACR_NAME=${ACR_LOGIN_SERVER%%.*}" >> $GITHUB_ENV
+          echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+
+      - name: Login to Azure Container Registry
+        if: ${{ github.event_name != 'pull_request' }}
+        run: az acr login --name ${{ env.ACR_NAME }}
+
+      - name: Build & Push frontend (:latest and :SHORT_SHA)
+        if: ${{ github.event_name != 'pull_request' }}
+        run: |
+          docker build \
+            -t ${{ env.ACR_LOGIN_SERVER }}/frontend:latest \
+            -t ${{ env.ACR_LOGIN_SERVER }}/frontend:${SHORT_SHA} \
+            ./frontend/
+          docker push ${{ env.ACR_LOGIN_SERVER }}/frontend:latest
+          docker push ${{ env.ACR_LOGIN_SERVER }}/frontend:${SHORT_SHA}
+
+      - name: Logout Azure
+        if: ${{ always() && github.event_name != 'pull_request' }}
+        run: az logout

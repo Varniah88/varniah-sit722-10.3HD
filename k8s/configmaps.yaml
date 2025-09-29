@@ -1,0 +1,21 @@
+# /k8s/configmaps.yaml
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ecomm-config-w05-aks
+data:
+  PRODUCTS_DB_NAME: products
+  ORDERS_DB_NAME: orders
+  CUSTOMERS_DB_NAME: customers
+
+  AZURE_STORAGE_CONTAINER_NAME: varniah 
+  AZURE_SAS_TOKEN_EXPIRY_HOURS: "24"
+
+  # Internal Service URLs (Kubernetes Service Names for inter-service communication)
+  # These are how your microservices will talk to each other within the cluster.
+  # Assuming Product:8000, Order:8001, Customer:8002
+  PRODUCT_SERVICE_URL: http://172.171.92.167:8000
+  ORDER_SERVICE_URL: http://4.157.74.83:8001
+  CUSTOMER_SERVICE_URL: http://20.253.84.142:8002
+  RABBITMQ_HOST: rabbitmq-service-w05-aks

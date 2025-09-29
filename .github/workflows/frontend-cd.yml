@@ -1,0 +1,117 @@
+name: CD - Deploy Frontend to AKS
+
+on:
+  workflow_call:
+    inputs:
+      product_api_ip:
+        description: Product API URL (e.g., http://X.X.X.X:8000)
+        required: true
+        type: string
+      order_api_ip:
+        description: Order API URL (e.g., http://Y.Y.Y.Y:8001)
+        required: true
+        type: string
+      customer_api_ip:
+        description: Customer API URL (e.g., http://Z.Z.Z.Z:8002)
+        required: true
+        type: string
+      k8s_namespace:
+        required: false
+        type: string
+      aks_cluster_name:
+        required: false
+        type: string
+      aks_resource_group:
+        required: false
+        type: string
+      frontend_tag:
+        required: false
+        type: string
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+env:
+  ACR_LOGIN_SERVER: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
+  K8S_NAMESPACE: ecommerce
+  FRONTEND_DEPLOY: frontend-w05-aks
+  FRONTEND_CONTAINER: frontend-container
+
+jobs:
+  deploy_frontend:
+    runs-on: ubuntu-latest
+    environment: Production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Resolve AKS, namespace, and tag
+        run: |
+          AKS_RG="${{ inputs.aks_resource_group }}"
+          [ -z "$AKS_RG" ] && AKS_RG="${{ secrets.AKS_RESOURCE_GROUP }}"
+          echo "AKS_RG=$AKS_RG" >> $GITHUB_ENV
+
+          AKS_NAME="${{ inputs.aks_cluster_name }}"
+          [ -z "$AKS_NAME" ] && AKS_NAME="${{ secrets.AKS_CLUSTER_NAME }}"
+          echo "AKS_NAME=$AKS_NAME" >> $GITHUB_ENV
+
+          K8S_NAMESPACE_RESOLVED="${{ inputs.k8s_namespace }}"
+          [ -z "$K8S_NAMESPACE_RESOLVED" ] && K8S_NAMESPACE_RESOLVED="${{ env.K8S_NAMESPACE }}"
+          echo "K8S_NAMESPACE_RESOLVED=$K8S_NAMESPACE_RESOLVED" >> $GITHUB_ENV
+
+          # Stick with :latest unless explicitly provided
+          FRONTEND_TAG="${{ inputs.frontend_tag }}"
+          [ -z "$FRONTEND_TAG" ] && FRONTEND_TAG="latest"
+          echo "FRONTEND_TAG=$FRONTEND_TAG" >> $GITHUB_ENV
+
+      - name: Set AKS context
+        run: |
+          az aks get-credentials -g "$AKS_RG" -n "$AKS_NAME" --overwrite-existing
+          kubectl cluster-info
+
+      - name: Ensure namespace exists
+        run: |
+          kubectl get ns "$K8S_NAMESPACE_RESOLVED" >/dev/null 2>&1 || kubectl create ns "$K8S_NAMESPACE_RESOLVED"
+
+      - name: Inject backend URLs into main.js
+        run: |
+          sed -i "s|_PRODUCT_API_URL_|${{ inputs.product_api_ip }}|g"   frontend/main.js
+          sed -i "s|_ORDER_API_URL_|${{ inputs.order_api_ip }}|g"       frontend/main.js
+          sed -i "s|_CUSTOMER_API_URL_|${{ inputs.customer_api_ip }}|g" frontend/main.js
+
+      - name: Derive ACR name
+        run: echo "ACR_NAME=${ACR_LOGIN_SERVER%%.*}" >> $GITHUB_ENV
+
+      - name: Login to Azure Container Registry
+        run: az acr login --name "$ACR_NAME"
+
+      - name: Build & Push frontend (:latest)
+        run: |
+          docker build -t ${{ env.ACR_LOGIN_SERVER }}/frontend:${FRONTEND_TAG} ./frontend/
+          docker push    ${{ env.ACR_LOGIN_SERVER }}/frontend:${FRONTEND_TAG}
+
+      - name: Apply manifests
+        run: kubectl apply -n "$K8S_NAMESPACE_RESOLVED" -f k8s/frontend.yaml
+
+      - name: Bump to :latest & rollout (force re-pull)
+        shell: bash
+        env:
+          NS: ${{ env.K8S_NAMESPACE_RESOLVED }}
+        run: |
+          set -Eeuo pipefail
+          # Update the correct deployment & container
+          kubectl -n ${NS} set image deploy/${{ env.FRONTEND_DEPLOY }} \
+            ${{ env.FRONTEND_CONTAINER }}=${{ env.ACR_LOGIN_SERVER }}/frontend:${FRONTEND_TAG}
+          # If tag hasn't changed, force a new rollout so pods re-pull :latest
+          kubectl -n ${NS} rollout restart deploy/${{ env.FRONTEND_DEPLOY }}
+          kubectl -n ${NS} rollout status  deploy/${{ env.FRONTEND_DEPLOY }} --timeout=300s
+
+      - name: Logout Azure
+        if: always()
+        run: az logout

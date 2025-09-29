@@ -1,0 +1,102 @@
+name: Orchestrator - CI to Staging and Prod
+
+on:
+  push:
+    branches: [ dev ]          # STAGING on push to dev
+  pull_request:
+    branches: [ main ]             # consider PRs into main
+    types: [ closed ]              # fire only when PR is closed (we check merged below)
+  workflow_dispatch: {}
+
+concurrency:
+  group: staging-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # STAGING (push to dev) 
+  backend_ci:
+    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/heads/dev') }}
+    uses: ./.github/workflows/backend_ci.yml
+    secrets: inherit
+
+  frontend_ci:
+    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/heads/dev') }}
+    needs: backend_ci
+    uses: ./.github/workflows/frontend_ci.yml
+    secrets: inherit
+
+  backend_cd_staging:
+    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/heads/dev') }}
+    needs: [backend_ci, frontend_ci]
+    uses: ./.github/workflows/backend-cd.yml
+    with:
+      k8s_namespace: ${{ format('stg-{0}', github.run_id) }}
+    secrets: inherit
+
+  frontend_cd_staging:
+    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/heads/dev') }}
+    needs: backend_cd_staging
+    uses: ./.github/workflows/frontend-cd.yml
+    with:
+      k8s_namespace: ${{ format('stg-{0}', github.run_id) }}
+      product_api_ip:  "http://${{ needs.backend_cd_staging.outputs.product_api_ip }}:8000"
+      order_api_ip:    "http://${{ needs.backend_cd_staging.outputs.order_api_ip }}:8001"
+      customer_api_ip: "http://${{ needs.backend_cd_staging.outputs.customer_api_ip }}:8002"
+    secrets: inherit
+
+  smoke_test_staging:
+    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/heads/dev') }}
+    needs: frontend_cd_staging
+    runs-on: ubuntu-latest
+    steps:
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Set AKS context
+        run: |
+          az aks get-credentials -g "${{ secrets.AKS_RESOURCE_GROUP }}" -n "${{ secrets.AKS_CLUSTER_NAME }}" --overwrite-existing
+      - name: Smoke test frontend
+        run: |
+          NS="${{ format('stg-{0}', github.run_id) }}"
+          FRONTEND_IP=$(kubectl -n "$NS" get svc frontend-w05-aks -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          echo "Frontend IP: $FRONTEND_IP"
+          curl -fsS "http://$FRONTEND_IP" >/dev/null
+
+  teardown_staging:
+    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/heads/dev') }}
+    needs: smoke_test_staging
+    runs-on: ubuntu-latest
+    steps:
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Set AKS context
+        run: |
+          az aks get-credentials -g "${{ secrets.AKS_RESOURCE_GROUP }}" -n "${{ secrets.AKS_CLUSTER_NAME }}" --overwrite-existing
+      - name: Delete staging namespace
+        run: kubectl delete ns "${{ format('stg-{0}', github.run_id) }}" --ignore-not-found
+
+  # ===================== PRODUCTION (merged PR to main) =====================
+  backend_cd_prod:
+    if: ${{ github.event_name == 'pull_request'
+            && github.event.pull_request.merged == true
+            && github.event.pull_request.base.ref == 'main' }}
+    uses: ./.github/workflows/backend-cd.yml
+    with:
+      k8s_namespace: ecommerce
+    secrets: inherit
+
+  frontend_cd_prod:
+    if: ${{ github.event_name == 'pull_request'
+            && github.event.pull_request.merged == true
+            && github.event.pull_request.base.ref == 'main' }}
+    needs: backend_cd_prod
+    uses: ./.github/workflows/frontend-cd.yml
+    with:
+      k8s_namespace: ecommerce
+      product_api_ip:  "http://${{ needs.backend_cd_prod.outputs.product_api_ip }}:8000"
+      order_api_ip:    "http://${{ needs.backend_cd_prod.outputs.order_api_ip }}:8001"
+      customer_api_ip: "http://${{ needs.backend_cd_prod.outputs.customer_api_ip }}:8002"
+    secrets: inherit
