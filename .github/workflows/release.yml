@@ -84,7 +84,6 @@ jobs:
             && github.event.pull_request.merged == true
             && github.event.pull_request.base.ref == 'main' }}
     uses: ./.github/workflows/backend-cd.yml
-    with:
     secrets: inherit
 
   frontend_cd_prod:
