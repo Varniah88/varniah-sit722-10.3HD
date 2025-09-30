@@ -5,6 +5,3 @@ output "aks_name" {
 output "acr_login_server" {
   value = azurerm_container_registry.acr.login_server
 }
-output "namespace" {
-  value = "stg-${random_integer.suffix.result}"
-}
