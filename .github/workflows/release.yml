@@ -85,7 +85,6 @@ jobs:
             && github.event.pull_request.base.ref == 'main' }}
     uses: ./.github/workflows/backend-cd.yml
     with:
-      # k8s_namespace: ecommerce
     secrets: inherit
 
   frontend_cd_prod:
@@ -95,7 +94,6 @@ jobs:
     needs: backend_cd_prod
     uses: ./.github/workflows/frontend-cd.yml
     with:
-      # k8s_namespace: ecommerce
       product_api_ip:  "http://${{ needs.backend_cd_prod.outputs.product_api_ip }}:8000"
       order_api_ip:    "http://${{ needs.backend_cd_prod.outputs.order_api_ip }}:8001"
       customer_api_ip: "http://${{ needs.backend_cd_prod.outputs.customer_api_ip }}:8002"

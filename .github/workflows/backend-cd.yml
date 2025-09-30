@@ -23,8 +23,6 @@ permissions:
 
 env:
   ACR_LOGIN_SERVER: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
-  # K8S_NAMESPACE: ecommerce
-
 
   PRODUCT_DEPLOY:    product-service-w05-aks
   ORDER_DEPLOY:      order-service-w05-aks
