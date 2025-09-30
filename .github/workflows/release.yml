@@ -84,6 +84,8 @@ jobs:
             && github.event.pull_request.merged == true
             && github.event.pull_request.base.ref == 'main' }}
     uses: ./.github/workflows/backend-cd.yml
+    with:
+    k8s_namespace: ecommerce
     secrets: inherit
 
   frontend_cd_prod:
