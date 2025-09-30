@@ -136,6 +136,9 @@ jobs:
           kubectl apply -n ${NS} -f k8s/product-service.yaml
           kubectl apply -n ${NS} -f k8s/order-service.yaml
           kubectl apply -n ${NS} -f k8s/customer-service.yaml
+          kubectl apply -n ${NS} -f k8s/hpa-product.yaml
+          kubectl apply -n ${NS} -f k8s/hpa-order.yaml
+          kubectl apply -n ${NS} -f k8s/hpa-customer.yaml
 
       - name: Rollout status (skip if missing)
         shell: bash

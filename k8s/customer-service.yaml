@@ -19,7 +19,7 @@ spec:
         - name: acr-secret
       containers:
       - name: customer-service-container
-        image: varniah.azurecr.io/customer_service:latest
+        image: varniahacr.azurecr.io/customer_service:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 8002
