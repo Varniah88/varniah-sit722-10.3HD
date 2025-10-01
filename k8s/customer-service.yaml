@@ -41,6 +41,12 @@ spec:
             secretKeyRef:
               name: ecomm-secrets-w05-aks
               key: POSTGRES_PASSWORD
+        resources:
+          requests:
+            cpu: "100m"
+          limits:
+            cpu: "500m"
+
 ---
 apiVersion: v1
 kind: Service

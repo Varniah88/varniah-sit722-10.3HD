@@ -66,6 +66,12 @@ spec:
             configMapKeyRef:
               name: ecomm-config-w05-aks
               key: CUSTOMER_SERVICE_URL
+        resources:
+          requests:
+            cpu: "100m"
+          limits:
+            cpu: "500m"
+
 ---
 apiVersion: v1
 kind: Service
@@ -79,5 +85,5 @@ spec:
   ports:
     - protocol: TCP
       port: 8001
-      targetPort: 8000
+      targetPort: 8001
   type: LoadBalancer
